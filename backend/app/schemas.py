@@ -1,8 +1,14 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+
+from app.referral_status import ReferralStatus
+
+RequiredName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+RequiredService = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+RequiredReason = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 
 
 class PatientCreate(BaseModel):
@@ -58,3 +64,52 @@ class PatientResponse(BaseModel):
 
 class PatientDetailResponse(PatientResponse):
     intakes: list[IntakeResponse]
+
+
+class ReferralCreate(BaseModel):
+    requested_service: RequiredService
+    reason: RequiredReason
+    requested_by: RequiredName
+    intake_id: UUID | None = None
+
+
+class ReferralReview(BaseModel):
+    decision: Literal["approved", "rejected"]
+    reviewed_by: RequiredName
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class ReferralStatusUpdate(BaseModel):
+    status: Literal["patient_arrived", "service_completed", "cancelled"]
+    updated_by: RequiredName
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class ReferralEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    referral_id: UUID
+    from_status: ReferralStatus | None
+    to_status: ReferralStatus
+    actor: str
+    note: str | None
+    created_at: datetime
+
+
+class ReferralSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    patient_id: UUID
+    intake_id: UUID | None
+    requested_service: str
+    reason: str
+    requested_by: str
+    status: ReferralStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReferralResponse(ReferralSummaryResponse):
+    events: list[ReferralEventResponse]

@@ -80,3 +80,97 @@ def test_intake_for_unknown_patient_returns_not_found(client: TestClient) -> Non
     )
 
     assert response.status_code == 404
+
+
+def test_referral_review_and_facility_status_lifecycle(client: TestClient) -> None:
+    patient = client.post("/patients", json={"full_name": "Synthetic Patient"}).json()
+    intake = client.post(
+        f"/patients/{patient['id']}/intakes",
+        json={"symptoms": "Synthetic symptom", "confirmed_by_worker": True},
+    ).json()
+    referral_response = client.post(
+        f"/patients/{patient['id']}/referrals",
+        json={
+            "requested_service": "Synthetic diagnostic service",
+            "reason": "Synthetic evaluation request",
+            "requested_by": "worker-demo",
+            "intake_id": intake["id"],
+        },
+    )
+
+    assert referral_response.status_code == 201
+    referral = referral_response.json()
+    assert referral["status"] == "pending_review"
+    assert referral["events"][0]["to_status"] == "pending_review"
+
+    review_response = client.post(
+        f"/referrals/{referral['id']}/review",
+        json={
+            "decision": "approved",
+            "reviewed_by": "doctor-demo",
+            "note": "Synthetic review note",
+        },
+    )
+    assert review_response.status_code == 200
+    assert review_response.json()["status"] == "approved"
+
+    arrival_response = client.post(
+        f"/referrals/{referral['id']}/status",
+        json={"status": "patient_arrived", "updated_by": "facility-demo"},
+    )
+    assert arrival_response.status_code == 200
+    assert arrival_response.json()["status"] == "patient_arrived"
+
+    completion_response = client.post(
+        f"/referrals/{referral['id']}/status",
+        json={
+            "status": "service_completed",
+            "updated_by": "facility-demo",
+            "note": "Synthetic completion",
+        },
+    )
+    assert completion_response.status_code == 200
+    completed = completion_response.json()
+    assert completed["status"] == "service_completed"
+    assert len(completed["events"]) == 4
+
+
+def test_referral_cannot_skip_approval_or_arrival(client: TestClient) -> None:
+    patient = client.post("/patients", json={"full_name": "Synthetic Patient"}).json()
+    referral = client.post(
+        f"/patients/{patient['id']}/referrals",
+        json={
+            "requested_service": "Synthetic diagnostic service",
+            "reason": "Synthetic evaluation request",
+            "requested_by": "worker-demo",
+        },
+    ).json()
+
+    response = client.post(
+        f"/referrals/{referral['id']}/status",
+        json={"status": "service_completed", "updated_by": "facility-demo"},
+    )
+
+    assert response.status_code == 409
+    assert client.get(f"/referrals/{referral['id']}").json()["status"] == "pending_review"
+
+
+def test_referral_rejects_intake_from_different_patient(client: TestClient) -> None:
+    first_patient = client.post("/patients", json={"full_name": "Synthetic Patient One"}).json()
+    second_patient = client.post("/patients", json={"full_name": "Synthetic Patient Two"}).json()
+    intake = client.post(
+        f"/patients/{first_patient['id']}/intakes",
+        json={"symptoms": "Synthetic symptom", "confirmed_by_worker": True},
+    ).json()
+
+    response = client.post(
+        f"/patients/{second_patient['id']}/referrals",
+        json={
+            "requested_service": "Synthetic diagnostic service",
+            "reason": "Synthetic evaluation request",
+            "requested_by": "worker-demo",
+            "intake_id": intake["id"],
+        },
+    )
+
+    assert response.status_code == 404

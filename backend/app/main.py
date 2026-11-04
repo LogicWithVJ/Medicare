@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from app.database import Base, create_database_engine, get_session
 from app.models import IntakeRecord, Patient
+from app.referrals import router as referrals_router
 from app.schemas import (
     IntakeCreate,
     IntakeResponse,
@@ -37,6 +38,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.session_factory = session_factory
+    app.include_router(referrals_router)
 
     @app.get("/health", tags=["system"])
     def health_check() -> dict[str, str]:
