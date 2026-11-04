@@ -174,3 +174,182 @@ def test_referral_rejects_intake_from_different_patient(client: TestClient) -> N
     )
 
     assert response.status_code == 404
+
+
+def test_facility_availability_update_and_listing(client: TestClient) -> None:
+    facility = client.post(
+        "/facilities",
+        json={
+            "name": "Synthetic PHC",
+            "address": "Example address",
+            "latitude": 19.076,
+            "longitude": 72.8777,
+            "operating_hours": "09:00-17:00",
+        },
+    ).json()
+
+    update_response = client.post(
+        f"/facilities/{facility['id']}/services/availability",
+        json={
+            "service_name": "Synthetic diagnostic service",
+            "status": "available",
+            "equipment_status": "Operational (synthetic)",
+            "updated_by": "facility-demo",
+        },
+    )
+    assert update_response.status_code == 201
+    assert update_response.json()["reported_status"] == "available"
+
+    listing = client.get(f"/facilities/{facility['id']}/services")
+    assert listing.status_code == 200
+    service = listing.json()["services"][0]
+    assert service["effective_status"] == "available"
+    assert service["latest_reported_status"] == "available"
+    assert service["updated_at"] is not None
+
+    second_update = client.post(
+        f"/facilities/{facility['id']}/services/availability",
+        json={
+            "service_name": "Synthetic diagnostic service",
+            "status": "unavailable",
+            "equipment_status": "Maintenance (synthetic)",
+            "updated_by": "facility-demo",
+        },
+    )
+    assert second_update.status_code == 201
+    refreshed_listing = client.get(f"/facilities/{facility['id']}/services").json()
+    service = refreshed_listing["services"][0]
+    assert service["effective_status"] == "unavailable"
+    assert service["latest_reported_status"] == "unavailable"
+
+    history = client.get(
+        f"/facilities/{facility['id']}/services/{service['id']}/availability-history"
+    )
+    assert history.status_code == 200
+    assert [item["reported_status"] for item in history.json()] == [
+        "unavailable",
+        "available",
+    ]
+
+
+def test_unknown_availability_and_stale_availability_are_not_confirmed(
+    client: TestClient,
+) -> None:
+    facility = client.post("/facilities", json={"name": "Synthetic facility"}).json()
+    client.post(
+        f"/facilities/{facility['id']}/services/availability",
+        json={
+            "service_name": "Synthetic test",
+            "status": "unknown",
+            "updated_by": "facility-demo",
+        },
+    )
+
+    unknown = client.get(f"/facilities/{facility['id']}/services").json()["services"][0]
+    assert unknown["effective_status"] == "unknown"
+
+    client.post(
+        f"/facilities/{facility['id']}/services/availability",
+        json={
+            "service_name": "Synthetic test",
+            "status": "available",
+            "updated_by": "facility-demo",
+        },
+    )
+    stale = client.get(
+        f"/facilities/{facility['id']}/services",
+        params={"freshness_hours": 0},
+    ).json()["services"][0]
+    assert stale["effective_status"] == "outdated"
+    assert stale["latest_reported_status"] == "available"
+
+
+def test_recommendations_rank_fresh_available_then_show_stale_as_unconfirmed(
+    client: TestClient,
+) -> None:
+    near_facility = client.post(
+        "/facilities",
+        json={"name": "Near facility", "latitude": 19.076, "longitude": 72.8777},
+    ).json()
+    far_facility = client.post(
+        "/facilities",
+        json={"name": "Far facility", "latitude": 20.0, "longitude": 73.0},
+    ).json()
+    for facility in [near_facility, far_facility]:
+        client.post(
+            f"/facilities/{facility['id']}/services/availability",
+            json={
+                "service_name": "Synthetic diagnostic service",
+                "status": "available",
+                "updated_by": "facility-demo",
+            },
+        )
+
+    fresh_results = client.get(
+        "/diagnostics/recommendations",
+        params={
+            "service": "synthetic diagnostic service",
+            "latitude": 19.076,
+            "longitude": 72.8777,
+        },
+    ).json()
+    assert [item["facility_id"] for item in fresh_results] == [
+        near_facility["id"],
+        far_facility["id"],
+    ]
+    assert all(item["effective_status"] == "available" for item in fresh_results)
+    assert fresh_results[0]["distance_km"] == 0
+
+    stale_results = client.get(
+        "/diagnostics/recommendations",
+        params={"service": "synthetic diagnostic service", "freshness_hours": 0},
+    ).json()
+    assert all(item["effective_status"] == "outdated" for item in stale_results)
+    assert all("not confirmed" in item["reason"] for item in stale_results)
+
+
+def test_recommendations_require_location_coordinates_as_a_pair(client: TestClient) -> None:
+    response = client.get(
+        "/diagnostics/recommendations",
+        params={"service": "Synthetic test", "latitude": 19.076},
+    )
+
+    assert response.status_code == 422
+
+
+def test_referral_can_link_only_to_facility_with_requested_service(
+    client: TestClient,
+) -> None:
+    patient = client.post("/patients", json={"full_name": "Synthetic Patient"}).json()
+    facility = client.post("/facilities", json={"name": "Synthetic PHC"}).json()
+    client.post(
+        f"/facilities/{facility['id']}/services/availability",
+        json={
+            "service_name": "Synthetic diagnostic service",
+            "status": "available",
+            "updated_by": "facility-demo",
+        },
+    )
+    referral_response = client.post(
+        f"/patients/{patient['id']}/referrals",
+        json={
+            "requested_service": "SYNTHETIC DIAGNOSTIC SERVICE",
+            "reason": "Synthetic evaluation request",
+            "requested_by": "doctor-demo",
+            "target_facility_id": facility["id"],
+        },
+    )
+
+    assert referral_response.status_code == 201
+    assert referral_response.json()["target_facility_id"] == facility["id"]
+
+    invalid_response = client.post(
+        f"/patients/{patient['id']}/referrals",
+        json={
+            "requested_service": "Unregistered service",
+            "reason": "Synthetic evaluation request",
+            "requested_by": "doctor-demo",
+            "target_facility_id": facility["id"],
+        },
+    )
+    assert invalid_response.status_code == 404

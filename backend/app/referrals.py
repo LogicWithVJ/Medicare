@@ -2,11 +2,11 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_session
-from app.models import IntakeRecord, Patient, Referral, ReferralEvent
+from app.models import FacilityService, IntakeRecord, Patient, Referral, ReferralEvent
 from app.referral_status import ReferralStatus
 from app.schemas import (
     ReferralCreate,
@@ -99,9 +99,25 @@ def create_referral(
                 detail="Intake record not found for patient",
             )
 
+    target_facility_id = (
+        str(referral_data.target_facility_id) if referral_data.target_facility_id else None
+    )
+    if target_facility_id is not None:
+        service_statement = select(FacilityService).where(
+            FacilityService.facility_id == target_facility_id,
+            func.lower(FacilityService.service_name)
+            == referral_data.requested_service.lower(),
+        )
+        if session.scalar(service_statement) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Requested service not registered at target facility",
+            )
+
     referral = Referral(
         patient_id=str(patient_id),
         intake_id=intake_id,
+        target_facility_id=target_facility_id,
         requested_service=referral_data.requested_service,
         reason=referral_data.reason,
         requested_by=referral_data.requested_by,

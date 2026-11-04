@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from app.database import Base, create_database_engine, get_session
+from app.facilities import router as facilities_router
 from app.models import IntakeRecord, Patient
 from app.referrals import router as referrals_router
 from app.schemas import (
@@ -34,11 +35,12 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app = FastAPI(
         title="RuralCare Connect API",
         description="Prototype API for rural healthcare coordination.",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
     )
     app.state.session_factory = session_factory
     app.include_router(referrals_router)
+    app.include_router(facilities_router)
 
     @app.get("/health", tags=["system"])
     def health_check() -> dict[str, str]:

@@ -21,7 +21,7 @@ Marathi speech support follows the basic intake workflow so there is a safe manu
 - **Clients:** Flutter mobile app and React web dashboard.
 - **Maps and analytics:** OpenStreetMap and Plotly where those features are introduced.
 
-The backend currently supports patient registration, worker-confirmed structured intake, and a referral-review/status lifecycle for synthetic development records. SQLite is the local default; set `DATABASE_URL` to a PostgreSQL connection URL to use PostgreSQL.
+The backend currently supports patient registration, worker-confirmed structured intake, doctor-reviewed referrals, and facility diagnostic-availability coordination for synthetic development records. SQLite is the local default; set `DATABASE_URL` to a PostgreSQL connection URL to use PostgreSQL.
 
 ## Backend quick start
 
@@ -61,7 +61,15 @@ python -m pytest
 - `GET /referrals/{referral_id}` — reads a referral and its status history.
 - `POST /referrals/{referral_id}/review` — records a doctor approval or rejection.
 - `POST /referrals/{referral_id}/status` — records arrival, service completion, or cancellation when the transition is valid.
+- `POST /facilities` — registers a participating facility and optional coordinates/hours.
+- `GET /facilities` — lists facilities with bounded pagination.
+- `POST /facilities/{facility_id}/services/availability` — registers or updates a facility service and records the reporting staff label and server timestamp.
+- `GET /facilities/{facility_id}/services` — returns service status as `available`, `unavailable`, `outdated`, or `unknown`; freshness defaults to 24 hours and can be varied for evaluation. An explicit `unknown` report remains unknown; stale available/unavailable reports become outdated.
+- `GET /facilities/{facility_id}/services/{facility_service_id}/availability-history` — returns timestamped availability updates with bounded pagination.
+- `GET /diagnostics/recommendations?service=...` — ranks matching facilities by effective availability, then distance when an origin and facility coordinates are available; each result explains its status.
+
+An approved referral can include `target_facility_id`; the facility must have the requested service registered. This selection does not itself verify current availability, which must be reviewed from the freshness-aware result.
 
 ## Safety and privacy status
 
-This prototype stores patient data and is for synthetic records in local development only; it is not ready for clinical use. Worker confirmation and referral actor fields record client assertions and are not authenticated identity or authorization. Authentication, role-based access, consent, encryption, tamper-resistant audit logging, retention controls, secure synchronization, and database migrations must be implemented and validated before handling real health information. No ABDM compliance is claimed.
+This prototype stores patient data and is for synthetic records in local development only; it is not ready for clinical use. Facility availability reports are staff-entered claims, not independently verified. Outdated or unknown availability is never presented as confirmed. Worker confirmation and referral actor fields record client assertions and are not authenticated identity or authorization. Authentication, role-based access, consent, encryption, tamper-resistant audit logging, retention controls, secure synchronization, and database migrations must be implemented and validated before handling real health information. No ABDM compliance is claimed.
