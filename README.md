@@ -21,7 +21,7 @@ Marathi speech support follows the basic intake workflow so there is a safe manu
 - **Clients:** Flutter mobile app and React web dashboard.
 - **Maps and analytics:** OpenStreetMap and Plotly where those features are introduced.
 
-The current first step is only the backend scaffold and health endpoint. Patient data, authentication, and clinical workflows are not implemented yet.
+The backend currently supports patient registration and worker-confirmed structured intake for synthetic development records. SQLite is the local default; set `DATABASE_URL` to a PostgreSQL connection URL to use PostgreSQL.
 
 ## Backend quick start
 
@@ -31,6 +31,13 @@ From `backend`:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
+```
+
+For PostgreSQL, set `DATABASE_URL` before starting the API, for example:
+
+```powershell
+$env:DATABASE_URL = "postgresql://user:password@localhost:5432/ruralcare"
 python -m uvicorn app.main:app --reload
 ```
 
@@ -44,8 +51,12 @@ python -m pytest
 
 ## Current API
 
-- `GET /health` — reports that the API process is responsive. It does not yet check a database.
+- `GET /health` — reports that the API process is responsive; it does not yet check database connectivity.
+- `POST /patients` — registers a patient using a minimum set of demographic fields.
+- `GET /patients` — lists patients with bounded `offset` and `limit` pagination.
+- `GET /patients/{patient_id}` — reads a patient and their saved intake records.
+- `POST /patients/{patient_id}/intakes` — saves symptoms, optional duration/history, and requires worker confirmation.
 
 ## Safety and privacy status
 
-This scaffold does not store patient data and is not ready for clinical use. Authentication, role-based access, consent, encryption, audit logging, retention controls, and secure synchronization must be implemented and validated before handling real health information. No ABDM compliance is claimed.
+This prototype stores patient data and is for synthetic records in local development only; it is not ready for clinical use. The intake confirmation field records a client assertion and is not authenticated worker identity or authorization. Authentication, role-based access, consent, encryption, audit logging, retention controls, secure synchronization, and database migrations must be implemented and validated before handling real health information. No ABDM compliance is claimed.
