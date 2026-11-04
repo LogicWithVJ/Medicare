@@ -84,6 +84,8 @@ npm run dev
 
 Open `http://localhost:5173`. Start the backend separately using the steps above. Set `VITE_API_URL` in `web/.env.local` if the backend is not at `http://127.0.0.1:8000`. For a deployed frontend, configure the backend's `CORS_ORIGINS` environment variable with the exact web origin.
 
+To manually register someone, open **Patient records** in the dashboard and select **Add patient**. Name is required; date of birth and village are optional. Intake fields are optional too, but if you enter any intake details, symptoms and worker confirmation are required before they can be saved. A patient may already be registered if a later intake save fails, so check the patient list before retrying.
+
 Build and lint the dashboard from `web`:
 
 ```powershell

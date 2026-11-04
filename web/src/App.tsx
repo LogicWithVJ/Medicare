@@ -237,6 +237,7 @@ function App() {
   const [referralFilter, setReferralFilter] = useState('all')
   const [patientSearch, setPatientSearch] = useState('')
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
+  const [addPatientOpen, setAddPatientOpen] = useState(false)
   const [selectedPatientData, setSelectedPatientData] = useState<{
     patientId: string
     patient: PatientDetail
@@ -435,6 +436,45 @@ function App() {
     } finally {
       setWorkingReferralId(null)
     }
+  }
+
+  async function handleCreatePatient(data: {
+    full_name: string
+    date_of_birth?: string
+    village?: string
+    intake?: {
+      symptoms: string
+      duration?: string
+      relevant_history?: string
+      confirmed_by_worker: true
+    }
+  }) {
+    const patient = await api.createPatient({
+      full_name: data.full_name,
+      ...(data.date_of_birth ? { date_of_birth: data.date_of_birth } : {}),
+      ...(data.village ? { village: data.village } : {}),
+    })
+
+    if (data.intake) {
+      try {
+        await api.createIntake(patient.id, data.intake)
+      } catch (error) {
+        setSelectedPatientId(patient.id)
+        await refresh()
+        setNotice({
+          kind: 'error',
+          text: `Patient registered, but intake was not saved: ${
+            error instanceof Error ? error.message : 'Unknown API error'
+          }`,
+        })
+        return
+      }
+    }
+
+    setSelectedPatientId(patient.id)
+    setPatientSearch('')
+    await refresh()
+    setSuccess(data.intake ? 'Patient and confirmed intake added.' : 'Patient added.')
   }
 
   async function handleCreateFacility(event: FormEvent<HTMLFormElement>) {
@@ -758,6 +798,7 @@ function App() {
                   selectedPatient={selectedPatient}
                   selectedPatientId={selectedPatientId}
                   onSelectPatient={setSelectedPatientId}
+                  onAddPatient={() => setAddPatientOpen(true)}
                 />
               )}
             </>
@@ -782,6 +823,13 @@ function App() {
             setReviewNote('')
           }}
           onReview={handleReview}
+        />
+      )}
+      {addPatientOpen && (
+        <AddPatientModal
+          saving={refreshing}
+          onClose={() => setAddPatientOpen(false)}
+          onCreate={handleCreatePatient}
         />
       )}
     </div>
@@ -1536,6 +1584,7 @@ function PatientsPage({
   selectedPatient,
   selectedPatientId,
   onSelectPatient,
+  onAddPatient,
 }: {
   patients: Patient[]
   allPatients: Patient[]
@@ -1544,12 +1593,16 @@ function PatientsPage({
   selectedPatient: PatientDetail | null
   selectedPatientId: string | null
   onSelectPatient: (patientId: string | null) => void
+  onAddPatient: () => void
 }) {
   return (
     <div className="patient-records-layout">
       <section className="panel patient-directory">
         <div className="panel-heading">
           <div><span className="panel-kicker">REGISTERED RECORDS</span><h2>Patients <span className="heading-count">{allPatients.length}</span></h2></div>
+          <button type="button" className="button button-primary" onClick={onAddPatient}>
+            <Icon name="plus" size={16} /> Add patient
+          </button>
         </div>
         <label className="search-field patient-search">
           <Icon name="search" size={17} />
@@ -1602,6 +1655,215 @@ function PatientsPage({
             <div className="patient-safety-note">Clinical information is displayed as entered and confirmed. This dashboard does not diagnose or recommend treatment.</div>
           </>
         )}
+      </section>
+    </div>
+  )
+}
+
+function AddPatientModal({
+  saving,
+  onClose,
+  onCreate,
+}: {
+  saving: boolean
+  onClose: () => void
+  onCreate: (data: {
+    full_name: string
+    date_of_birth?: string
+    village?: string
+    intake?: {
+      symptoms: string
+      duration?: string
+      relevant_history?: string
+      confirmed_by_worker: true
+    }
+  }) => Promise<void>
+}) {
+  const [fullName, setFullName] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
+  const [village, setVillage] = useState('')
+  const [symptoms, setSymptoms] = useState('')
+  const [duration, setDuration] = useState('')
+  const [relevantHistory, setRelevantHistory] = useState('')
+  const [workerConfirmed, setWorkerConfirmed] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const hasIntakeDetails = Boolean(
+    symptoms.trim() || duration.trim() || relevantHistory.trim(),
+  )
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (hasIntakeDetails && !symptoms.trim()) {
+      setError('Enter the patient’s symptoms before adding intake details.')
+      return
+    }
+    if (hasIntakeDetails && !workerConfirmed) {
+      setError('Confirm that the intake details have been reviewed before saving.')
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    try {
+      await onCreate({
+        full_name: fullName.trim(),
+        ...(dateOfBirth ? { date_of_birth: dateOfBirth } : {}),
+        ...(village.trim() ? { village: village.trim() } : {}),
+        ...(hasIntakeDetails
+          ? {
+              intake: {
+                symptoms: symptoms.trim(),
+                ...(duration.trim() ? { duration: duration.trim() } : {}),
+                ...(relevantHistory.trim()
+                  ? { relevant_history: relevantHistory.trim() }
+                  : {}),
+                confirmed_by_worker: true,
+              },
+            }
+          : {}),
+      })
+      onClose()
+    } catch (createError) {
+      setError(
+        createError instanceof Error ? createError.message : 'Could not register patient.',
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !submitting && !saving) onClose()
+      }}
+    >
+      <section
+        className="review-modal add-patient-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-patient-title"
+      >
+        <div className="modal-heading">
+          <div>
+            <span className="panel-kicker">PATIENT INTAKE</span>
+            <h2 id="add-patient-title">Add a patient</h2>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Close add patient form"
+            onClick={onClose}
+            disabled={submitting || saving}
+          >
+            <Icon name="close" />
+          </button>
+        </div>
+        <p className="form-intro modal-form-intro">
+          Register a patient using synthetic data. Add intake details only after reviewing them
+          with the patient.
+        </p>
+        <form className="stacked-form patient-create-form" onSubmit={submit}>
+          <label className="form-field">
+            <span>Patient name</span>
+            <input
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Enter full name"
+              maxLength={120}
+              autoComplete="name"
+              required
+            />
+          </label>
+          <div className="patient-form-row">
+            <label className="form-field">
+              <span>Date of birth <small>Optional</small></span>
+              <input
+                type="date"
+                value={dateOfBirth}
+                onChange={(event) => setDateOfBirth(event.target.value)}
+              />
+            </label>
+            <label className="form-field">
+              <span>Village <small>Optional</small></span>
+              <input
+                value={village}
+                onChange={(event) => setVillage(event.target.value)}
+                placeholder="Village or locality"
+                maxLength={120}
+              />
+            </label>
+          </div>
+          <div className="patient-form-divider">
+            <span>INTAKE DETAILS</span>
+            <small>Optional</small>
+          </div>
+          <label className="form-field">
+            <span>Symptoms</span>
+            <textarea
+              value={symptoms}
+              onChange={(event) => setSymptoms(event.target.value)}
+              placeholder="Enter only what the patient reports"
+              maxLength={4000}
+              rows={3}
+            />
+          </label>
+          <label className="form-field">
+            <span>Duration <small>Optional</small></span>
+            <input
+              value={duration}
+              onChange={(event) => setDuration(event.target.value)}
+              placeholder="e.g. 2 days"
+              maxLength={120}
+            />
+          </label>
+          <label className="form-field">
+            <span>Relevant history <small>Optional</small></span>
+            <textarea
+              value={relevantHistory}
+              onChange={(event) => setRelevantHistory(event.target.value)}
+              placeholder="Enter history shared by the patient"
+              maxLength={4000}
+              rows={2}
+            />
+          </label>
+          {hasIntakeDetails && (
+            <label className="worker-confirmation">
+              <input
+                type="checkbox"
+                checked={workerConfirmed}
+                onChange={(event) => setWorkerConfirmed(event.target.checked)}
+              />
+              <span>
+                I have reviewed these intake details and confirm them before saving.
+              </span>
+            </label>
+          )}
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <p className="patient-form-safety">
+            This prototype does not diagnose or suggest treatment. Use synthetic data only.
+          </p>
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="button button-secondary"
+              disabled={submitting || saving}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={submitting || saving}
+            >
+              <Icon name="plus" size={16} />
+              {submitting || saving ? 'Saving…' : 'Save patient'}
+            </button>
+          </div>
+        </form>
       </section>
     </div>
   )

@@ -47,6 +47,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   listPatients: () => request<Patient[]>('/patients?limit=100'),
   getPatient: (patientId: string) => request<PatientDetail>(`/patients/${patientId}`),
+  createPatient: (data: {
+    full_name: string
+    date_of_birth?: string
+    village?: string
+  }) =>
+    request<Patient>('/patients', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  createIntake: (
+    patientId: string,
+    data: {
+      symptoms: string
+      duration?: string
+      relevant_history?: string
+      confirmed_by_worker: true
+    },
+  ) =>
+    request<PatientDetail['intakes'][number]>(`/patients/${patientId}/intakes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   listReferrals: () => request<Referral[]>('/referrals?limit=100'),
   listFacilities: () => request<Facility[]>('/facilities?limit=100'),
   getFacilityServices: (facilityId: string) =>

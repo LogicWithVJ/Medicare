@@ -1314,11 +1314,83 @@
 
 .review-modal {
   width: min(100%, 520px);
+  max-height: min(90vh, 780px);
   padding: 23px;
   border: 1px solid #e6ebe7;
   border-radius: 13px;
   background: #fff;
   box-shadow: 0 24px 70px rgba(16, 36, 27, .22);
+  overflow-y: auto;
+}
+
+.add-patient-modal {
+  width: min(100%, 580px);
+}
+
+.modal-form-intro {
+  margin: -4px 0 16px;
+}
+
+.patient-create-form {
+  padding: 0;
+  gap: 12px;
+}
+
+.patient-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+}
+
+.patient-form-divider {
+  padding-top: 5px;
+  border-top: 1px solid #edf1ed;
+  color: #89978f;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: .8px;
+}
+
+.patient-form-divider small {
+  color: #a1aaa5;
+  font-size: 8px;
+  font-weight: 450;
+  letter-spacing: 0;
+}
+
+.worker-confirmation {
+  padding: 10px;
+  border: 1px solid #dfece2;
+  border-radius: 7px;
+  color: #5d7565;
+  background: #f5faf6;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.worker-confirmation input {
+  margin: 1px 0 0;
+  accent-color: #46785e;
+}
+
+.form-error {
+  margin: 0;
+  color: #a34d3e;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.patient-form-safety {
+  margin: -2px 0 0;
+  color: #9b8c76;
+  font-size: 8px;
+  line-height: 1.45;
 }
 
 .modal-heading {
@@ -2632,6 +2704,10 @@
 
   .review-modal {
     padding: 17px;
+  }
+
+  .patient-form-row {
+    grid-template-columns: 1fr;
   }
 
   .modal-actions {
