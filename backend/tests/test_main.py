@@ -19,6 +19,19 @@ def test_health_check(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_local_dashboard_origin_is_allowed_by_cors(client: TestClient) -> None:
+    response = client.options(
+        "/patients",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 def test_register_patient_and_add_confirmed_intake(client: TestClient) -> None:
     patient_response = client.post(
         "/patients",

@@ -6,3 +6,8 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
+web/node_modules/
+web/dist/
+web/.env
+web/.env.*
+!web/.env.example

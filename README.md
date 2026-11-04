@@ -70,6 +70,27 @@ python -m pytest
 
 An approved referral can include `target_facility_id`; the facility must have the requested service registered. This selection does not itself verify current availability, which must be reviewed from the freshness-aware result.
 
+## Web dashboard
+
+The React + TypeScript dashboard provides a doctor referral queue with review actions, referral status tracking, patient intake views, facility registration, availability updates/history, and freshness-aware service recommendations. It uses synthetic demo labels; authentication and role-based permissions are not implemented.
+
+In a second terminal, from `web`:
+
+```powershell
+Copy-Item .env.example .env.local
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. Start the backend separately using the steps above. Set `VITE_API_URL` in `web/.env.local` if the backend is not at `http://127.0.0.1:8000`. For a deployed frontend, configure the backend's `CORS_ORIGINS` environment variable with the exact web origin.
+
+Build and lint the dashboard from `web`:
+
+```powershell
+npm run build
+npm run lint
+```
+
 ## Safety and privacy status
 
 This prototype stores patient data and is for synthetic records in local development only; it is not ready for clinical use. Facility availability reports are staff-entered claims, not independently verified. Outdated or unknown availability is never presented as confirmed. Worker confirmation and referral actor fields record client assertions and are not authenticated identity or authorization. Authentication, role-based access, consent, encryption, tamper-resistant audit logging, retention controls, secure synchronization, and database migrations must be implemented and validated before handling real health information. No ABDM compliance is claimed.
